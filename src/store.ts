@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { defaultConfig, defaultPack, getDataDir, normalizeBaseUrl } from "./config.ts";
-import type { AppConfig, ChatSession, ChatSessionFile, MemoPack, StoredMessage } from "./types.ts";
+import { normalizeLocalMemoPack, normalizeMemoPack, packForExport, safePackFilename } from "./market.ts";
+import type { AppConfig, ChatSession, ChatSessionFile, LocalMemoPack, MarketChannel, MarketChannelsFile, MemoPack, StoredMessage } from "./types.ts";
 import { generateId, nowIso, sessionTitleFromText } from "./utils.ts";
 
 interface StorePaths {
@@ -11,7 +12,23 @@ interface StorePaths {
   currentChat: string;
   sessions: string;
   archives: string;
+  channels: string;
+  packs: string;
 }
+
+const defaultChannelsFile: MarketChannelsFile = {
+  selectedChannelId: "channel_default_n0n4w3",
+  channels: [
+    {
+      id: "channel_default_n0n4w3",
+      url: "https://n0n4w3.cn:8080",
+      token: "",
+      username: "",
+      name: "https://n0n4w3.cn:8080",
+      description: "",
+    },
+  ],
+};
 
 export class JsonStore {
   readonly paths: StorePaths;
@@ -24,6 +41,8 @@ export class JsonStore {
       currentChat: path.join(root, "current-chat.json"),
       sessions: path.join(root, "sessions"),
       archives: path.join(root, "archives"),
+      channels: path.join(root, "channels.json"),
+      packs: path.join(root, "packs"),
     };
   }
 
@@ -31,6 +50,8 @@ export class JsonStore {
     await fs.mkdir(this.paths.root, { recursive: true });
     await fs.mkdir(this.paths.sessions, { recursive: true });
     await fs.mkdir(this.paths.archives, { recursive: true });
+    await fs.mkdir(this.paths.packs, { recursive: true });
+    await this.writeJsonIfMissing(this.paths.channels, defaultChannelsFile);
   }
 
   async loadConfig(): Promise<AppConfig> {
@@ -56,15 +77,92 @@ export class JsonStore {
 
   async loadPack(): Promise<MemoPack> {
     const parsed = await this.readJson<Record<string, unknown>>(this.paths.pack, {});
+    const normalized = normalizeMemoPack(parsed);
     return {
-      systemPrompt: stringValue(parsed.systemPrompt, parsed.system_prompt, defaultPack.systemPrompt),
-      rules: normalizeRules(parsed.rules),
-      memos: normalizeMemos(parsed.memos),
+      systemPrompt: normalized.systemPrompt || defaultPack.systemPrompt,
+      rules: normalized.rules,
+      memos: normalized.memos,
     };
   }
 
   async savePack(pack: MemoPack): Promise<void> {
     await this.writeJson(this.paths.pack, pack);
+  }
+
+  async loadChannels(): Promise<MarketChannelsFile> {
+    const parsed = await this.readJson<Partial<MarketChannelsFile>>(this.paths.channels, {});
+    const channels = Array.isArray(parsed.channels)
+      ? parsed.channels.map(normalizeChannel).filter((channel): channel is MarketChannel => channel !== null)
+      : [];
+    const selected = typeof parsed.selectedChannelId === "string" ? parsed.selectedChannelId : "";
+    const selectedChannelId = channels.some((channel) => channel.id === selected) ? selected : channels[0]?.id || "";
+    return { selectedChannelId, channels };
+  }
+
+  async saveChannels(data: MarketChannelsFile): Promise<void> {
+    const channels = data.channels.map(normalizeChannel).filter((channel): channel is MarketChannel => channel !== null);
+    const selectedChannelId = channels.some((channel) => channel.id === data.selectedChannelId)
+      ? data.selectedChannelId
+      : channels[0]?.id || "";
+    await this.writeJson(this.paths.channels, { selectedChannelId, channels });
+  }
+
+  async listLocalPacks(): Promise<LocalMemoPack[]> {
+    await fs.mkdir(this.paths.packs, { recursive: true });
+    const entries = await fs.readdir(this.paths.packs, { withFileTypes: true });
+    const packs: LocalMemoPack[] = [];
+
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const parsed = await this.readJson<unknown>(path.join(this.paths.packs, entry.name), null);
+      try {
+        packs.push(normalizeLocalMemoPack(parsed, { id: path.basename(entry.name, ".json") }));
+      } catch {
+        // Ignore malformed library entries so one bad file does not break the market view.
+      }
+    }
+
+    packs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return packs;
+  }
+
+  async loadLocalPack(id: string): Promise<LocalMemoPack | null> {
+    const parsed = await this.readJson<unknown>(path.join(this.paths.packs, safePackFilename(id)), null);
+    if (parsed === null) return null;
+    return normalizeLocalMemoPack(parsed, { id });
+  }
+
+  async saveLocalPack(pack: LocalMemoPack): Promise<LocalMemoPack> {
+    const normalized = normalizeLocalMemoPack({
+      ...pack,
+      updatedAt: nowIso(),
+    });
+    await this.writeJson(path.join(this.paths.packs, safePackFilename(normalized.id)), normalized);
+    return normalized;
+  }
+
+  async deleteLocalPack(id: string): Promise<boolean> {
+    try {
+      await fs.unlink(path.join(this.paths.packs, safePackFilename(id)));
+      return true;
+    } catch (error) {
+      if (isNodeError(error) && error.code === "ENOENT") return false;
+      throw error;
+    }
+  }
+
+  async importLocalPack(filePath: string): Promise<LocalMemoPack> {
+    const raw = await fs.readFile(filePath, "utf8");
+    const parsed = JSON.parse(raw) as unknown;
+    const imported = normalizeLocalMemoPack(parsed, {
+      name: path.basename(filePath, path.extname(filePath)),
+    });
+    return this.saveLocalPack(imported);
+  }
+
+  async exportMemoPack(filePath: string, pack: LocalMemoPack | (MemoPack & { name?: string; description?: string })): Promise<void> {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await this.writeJson(filePath, packForExport(pack));
   }
 
   async loadCurrentMessages(): Promise<StoredMessage[]> {
@@ -153,6 +251,15 @@ export class JsonStore {
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   }
+
+  private async writeJsonIfMissing(file: string, value: unknown): Promise<void> {
+    try {
+      await fs.access(file);
+    } catch (error) {
+      if (!isNodeError(error) || error.code !== "ENOENT") throw error;
+      await this.writeJson(file, value);
+    }
+  }
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
@@ -173,24 +280,17 @@ function booleanValue(...values: unknown[]): boolean {
   return false;
 }
 
-function normalizeRules(value: unknown): MemoPack["rules"] {
-  if (!Array.isArray(value)) return defaultPack.rules;
-  return value
-    .filter((item): item is Record<string, unknown> => item !== null && typeof item === "object")
-    .map((item) => ({
-      title: stringValue(item.title, item.description),
-      updateRule: stringValue(item.updateRule, item.update_rule),
-    }))
-    .filter((rule) => rule.title || rule.updateRule);
-}
-
-function normalizeMemos(value: unknown): MemoPack["memos"] {
-  if (!Array.isArray(value)) return defaultPack.memos;
-  return value
-    .filter((item): item is Record<string, unknown> => item !== null && typeof item === "object")
-    .map((item) => ({
-      title: stringValue(item.title),
-      content: stringValue(item.content),
-    }))
-    .filter((memo) => memo.title || memo.content);
+function normalizeChannel(value: unknown): MarketChannel | null {
+  if (value === null || typeof value !== "object") return null;
+  const object = value as Record<string, unknown>;
+  const url = stringValue(object.url).replace(/\/+$/, "");
+  if (!url) return null;
+  return {
+    id: stringValue(object.id) || generateId("channel"),
+    url,
+    token: stringValue(object.token),
+    username: stringValue(object.username),
+    name: stringValue(object.name) || url,
+    description: stringValue(object.description),
+  };
 }

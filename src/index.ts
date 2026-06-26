@@ -32,21 +32,28 @@ async function main(): Promise<void> {
 async function doctor(): Promise<void> {
   const store = new JsonStore();
   await store.ensure();
-  const [config, pack, sessions] = await Promise.all([
+  const [config, pack, sessions, channels, localPacks] = await Promise.all([
     store.loadConfig(),
     store.loadPack(),
     store.listSessions(),
+    store.loadChannels(),
+    store.listLocalPacks(),
   ]);
+  const selectedChannel = channels.channels.find((channel) => channel.id === channels.selectedChannelId) || null;
 
   console.log("MemoChatTUI doctor");
   console.log(`node: ${process.version}`);
   console.log(`dataDir: ${getDataDir()}`);
+  console.log(`marketPacksDir: ${store.paths.packs}`);
   console.log(`baseUrl: ${config.baseUrl}`);
   console.log(`model: ${config.modelId || "(empty)"}`);
   console.log(`apiKey: ${config.apiKey ? "set" : "empty"}`);
   console.log(`rules: ${pack.rules.length}`);
   console.log(`memos: ${pack.memos.length}`);
   console.log(`sessions: ${sessions.length}`);
+  console.log(`channels: ${channels.channels.length}`);
+  console.log(`selectedChannel: ${selectedChannel ? `${selectedChannel.name} (${selectedChannel.id})` : "(none)"}`);
+  console.log(`localPacks: ${localPacks.length}`);
 }
 
 function printHelp(): void {

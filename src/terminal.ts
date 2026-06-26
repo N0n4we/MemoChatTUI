@@ -1,5 +1,6 @@
 import readline from "node:readline";
 import { describeConfig, AppController } from "./app.ts";
+import { maskSecret } from "./config.ts";
 import type { AppState, StoredMessage } from "./types.ts";
 import { clamp, formatDateTime, padRightVisible, repeat, truncateVisible, wrapText } from "./utils.ts";
 
@@ -209,6 +210,8 @@ function buildContentLines(state: AppState, width: number): string[] {
       return sessionLines(state, width);
     case "settings":
       return settingsLines(state, width);
+    case "market":
+      return marketLines(state, width);
     case "help":
       return helpLines(width);
     case "chat":
@@ -333,12 +336,123 @@ function settingsLines(state: AppState, width: number): string[] {
   return lines;
 }
 
+function marketLines(state: AppState, width: number): string[] {
+  const market = state.market;
+  const selected = market.channels.find((channel) => channel.id === market.selectedChannelId) || null;
+  const lines = [bold("MemoPack Market"), ""];
+
+  lines.push(bold("Selected Channel"));
+  if (!selected) {
+    lines.push(dim("  No channel selected. Add one with /channel add <url>."));
+  } else {
+    lines.push(`  ${selected.name || selected.url}`);
+    lines.push(dim(`  ${selected.url}`));
+    if (selected.description) {
+      for (const line of wrapText(selected.description, width - 2)) lines.push(`  ${line}`);
+    }
+    const auth = selected.token
+      ? `${selected.username || "authenticated"} (${maskSecret(selected.token)})`
+      : "not authenticated";
+    lines.push(`  auth: ${auth}`);
+  }
+
+  lines.push("");
+  lines.push(bold("Channels"));
+  if (market.channels.length === 0) {
+    lines.push(dim("  No channels saved."));
+  } else {
+    market.channels.forEach((channel, index) => {
+      const active = channel.id === market.selectedChannelId ? "*" : " ";
+      const auth = channel.token ? `auth ${maskSecret(channel.token)}` : "no auth";
+      lines.push(truncateVisible(
+        `  ${active} ${String(index + 1).padStart(2, " ")}. ${channel.name || channel.url}  ${auth}`,
+        width,
+      ));
+      lines.push(dim(truncateVisible(`       ${channel.url}`, width)));
+    });
+  }
+
+  lines.push("");
+  lines.push(bold(`Local Packs (${market.localPacks.length})`));
+  if (market.localPacks.length === 0) {
+    lines.push(dim("  No local packs. Save the active pack with /pack save-current <name> | <description>."));
+  } else {
+    market.localPacks.forEach((pack, index) => {
+      lines.push(truncateVisible(
+        `  ${String(index + 1).padStart(2, " ")}. ${pack.name}  ${pack.rules.length} rules, ${pack.memos.length} memos`,
+        width,
+      ));
+      if (pack.description) {
+        for (const line of wrapText(pack.description, width - 7)) lines.push(dim(`       ${line}`));
+      }
+      lines.push(dim(truncateVisible(
+        `       id: ${pack.id} | updated ${formatDateTime(pack.updatedAt)} | created ${formatDateTime(pack.createdAt)}`,
+        width,
+      )));
+    });
+  }
+
+  lines.push("");
+  const search = market.remoteSearch ? ` search "${market.remoteSearch}"` : "";
+  const tag = market.remoteTag ? ` tag "${market.remoteTag}"` : "";
+  lines.push(bold(`Remote Packs (${market.remotePacks.length}/${market.remoteTotal}, page ${market.remotePage}${search}${tag})`));
+  if (market.remotePacks.length === 0) {
+    lines.push(dim(selected ? "  No remote results. Fetch with /market remote or /market search <text>." : "  Select a channel to fetch remote packs."));
+  } else {
+    market.remotePacks.forEach((pack, index) => {
+      lines.push(truncateVisible(
+        `  ${String(index + 1).padStart(2, " ")}. ${pack.name}  id: ${pack.id}  ${pack.ruleCount} rules, ${pack.memoCount} memos`,
+        width,
+      ));
+      const meta = [
+        pack.author ? `by ${pack.author}` : "",
+        pack.updatedAt ? `updated ${formatDateTime(pack.updatedAt)}` : "",
+      ].filter(Boolean).join(" | ");
+      if (meta) lines.push(dim(truncateVisible(`       ${meta}`, width)));
+      if (pack.description) {
+        for (const line of wrapText(pack.description, width - 7)) lines.push(dim(`       ${line}`));
+      }
+    });
+  }
+
+  lines.push("");
+  lines.push(bold("Commands"));
+  const commands = [
+    "/market remote [page]",
+    "/market search <text>",
+    "/market install <index|id>",
+    "/market delete <index|id>",
+    "/channel add|select|remove|login|register|me",
+    "/pack save-current|install|delete|import|export|publish",
+  ];
+  for (const command of commands) lines.push(`  ${truncateVisible(command, width - 2)}`);
+  return lines;
+}
+
 function helpLines(width: number): string[] {
   const commands = [
     ["/chat", "show chat view"],
     ["/memo", "show memo view"],
     ["/sessions", "show saved sessions"],
     ["/settings", "show settings"],
+    ["/market", "show MemoPack Market"],
+    ["/market local", "refresh local pack list"],
+    ["/market remote [page]", "fetch remote packs"],
+    ["/market search <text>", "search remote packs"],
+    ["/market install <index|id>", "install a fetched remote pack"],
+    ["/market delete <index|id>", "delete a remote pack"],
+    ["/channel add <url>", "add a market channel"],
+    ["/channel select <index|id>", "select a market channel"],
+    ["/channel remove <index|id>", "remove a market channel"],
+    ["/channel login <user> <pass>", "login to selected channel"],
+    ["/channel register <user> <pass>", "register on selected channel"],
+    ["/channel me", "show selected channel account"],
+    ["/pack save-current <name> | <description>", "save active MemoPack locally"],
+    ["/pack install <index|id>", "install a local MemoPack"],
+    ["/pack delete <index|id>", "delete a local MemoPack"],
+    ["/pack import <path>", "import a MemoPack JSON file"],
+    ["/pack export active|<id> <path>", "export a MemoPack JSON file"],
+    ["/pack publish active|<index|id>", "publish to selected channel"],
     ["/set apiKey <key>", "save API key"],
     ["/set baseUrl <url>", "save OpenAI-compatible API base URL"],
     ["/set model <id>", "save chat model"],
@@ -358,7 +472,7 @@ function helpLines(width: number): string[] {
 
   const lines = [bold("Help"), ""];
   for (const [command, description] of commands) {
-    const left = padRightVisible(command, 30);
+    const left = padRightVisible(command, 38);
     lines.push(truncateVisible(`  ${left} ${description}`, width));
   }
   return lines;

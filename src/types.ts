@@ -54,6 +54,80 @@ export interface MemoPack {
   memos: Memo[];
 }
 
+export interface LocalMemoPack extends MemoPack {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RemoteMemoPack extends MemoPack {
+  id: string;
+  name: string;
+  description: string;
+  author?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  ruleCount: number;
+  memoCount: number;
+  raw: unknown;
+}
+
+export interface MarketChannel {
+  id: string;
+  url: string;
+  token: string;
+  username: string;
+  name: string;
+  description: string;
+}
+
+export interface MarketChannelsFile {
+  selectedChannelId: string;
+  channels: MarketChannel[];
+}
+
+export interface ServerInfo {
+  name: string;
+  description: string;
+}
+
+export interface UserInfo {
+  id: string;
+  username: string;
+  token?: string;
+  created_at?: string;
+  createdAt?: string;
+}
+
+export interface PublishMemoPackReq {
+  name: string;
+  description: string;
+  system_prompt: string;
+  rules: { title: string; update_rule: string }[];
+  memos: { title: string; content: string }[];
+}
+
+export interface ListResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface MarketState {
+  channels: MarketChannel[];
+  selectedChannelId: string;
+  localPacks: LocalMemoPack[];
+  remotePacks: RemoteMemoPack[];
+  remoteTotal: number;
+  remotePage: number;
+  remoteLimit: number;
+  remoteSearch: string;
+  remoteTag: string;
+}
+
 export interface ChatSession {
   id: string;
   title: string;
@@ -67,7 +141,7 @@ export interface ChatSessionFile {
   messages: StoredMessage[];
 }
 
-export type ViewName = "chat" | "memo" | "sessions" | "settings" | "help";
+export type ViewName = "chat" | "memo" | "sessions" | "settings" | "market" | "help";
 
 export interface AppState {
   config: AppConfig;
@@ -75,6 +149,7 @@ export interface AppState {
   messages: StoredMessage[];
   sessions: ChatSession[];
   currentSessionId: string;
+  market: MarketState;
   view: ViewName;
   status: string;
   busy: boolean;
