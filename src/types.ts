@@ -143,6 +143,32 @@ export interface ChatSessionFile {
 
 export type ViewName = "chat" | "memo" | "sessions" | "settings" | "market" | "help";
 
+export type TerminalFocusMode = "prompt" | "completion" | "overlay";
+
+export type TerminalOverlayKind =
+  | "command-palette"
+  | "session-picker"
+  | "local-pack-picker"
+  | "remote-pack-picker"
+  | "channel-picker"
+  | "confirmation";
+
+export interface PromptCursorState {
+  text: string;
+  cursor: number;
+}
+
+export interface TerminalInteractionState {
+  prompt: PromptCursorState;
+  promptHistory: string[];
+  promptHistoryIndex: number | null;
+  activeOverlay: TerminalOverlayKind | null;
+  selectedRow: number;
+  filterText: string;
+  sidePanelVisible: boolean;
+  focusMode: TerminalFocusMode;
+}
+
 export interface AppState {
   config: AppConfig;
   pack: MemoPack;

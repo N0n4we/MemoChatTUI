@@ -39,6 +39,18 @@ Inside the TUI:
 
 Then type a normal message and press Enter.
 
+## Keyboard Experience
+
+- `Ctrl-P` opens the command palette. Search by command name, alias, or description, then press Enter.
+- Type `/` to show slash-command suggestions. Use Up/Down to choose and Tab to complete.
+- The prompt is editable: Left/Right, Home/End, `Ctrl-A`, `Ctrl-E`, Backspace, and Delete all work in place.
+- Editing shortcuts: `Ctrl-K` deletes to the end, `Ctrl-U` deletes to the start, and `Ctrl-W` deletes the previous word.
+- `Ctrl-J` inserts a prompt newline. Shift/modified Enter is handled as a best-effort newline when the terminal reports it.
+- Up/Down recalls submitted prompt history when no overlay or slash suggestions are active.
+- `PgUp`/`PgDn` scrolls the transcript. The transcript follows streaming output until you manually scroll away.
+- Palette picker actions support sessions, local MemoPacks, remote MemoPacks, and market channels. Destructive picker actions require confirmation.
+- Existing slash commands are unchanged and remain the stable command contract.
+
 ## Commands
 
 ```text
@@ -74,6 +86,7 @@ Then type a normal message and press Enter.
 /set model <id>               Save chat model
 /set compactModel <id>        Save memo compact model
 /set reasoning on|off         Toggle reasoning request
+/set compactReasoning on|off  Toggle compact reasoning request
 /system <text>                Replace system prompt
 /rule add <title> | <rule>    Add a memo update rule
 /rule del <index>             Delete a memo rule

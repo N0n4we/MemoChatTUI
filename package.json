@@ -8,6 +8,7 @@
     "start": "node --experimental-strip-types src/index.ts",
     "dev": "node --watch --experimental-strip-types src/index.ts",
     "check": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/*.test.ts",
     "doctor": "node --experimental-strip-types src/index.ts --doctor"
   },
   "engines": {
