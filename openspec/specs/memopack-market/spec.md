@@ -56,7 +56,7 @@ The system SHALL manage multiple remote MemoPack market channels.
 
 #### Scenario: Seeding the default channel on first startup
 - **WHEN** the TUI initializes a new data directory without an existing channels file
-- **THEN** the system stores `https://n0n4w3.cn:8080` as the selected default channel without authentication.
+- **THEN** the system stores `https://n0n4w3.cn/memomarket` as the selected default channel without authentication.
 
 #### Scenario: Adding a channel
 - **WHEN** the user adds a channel URL

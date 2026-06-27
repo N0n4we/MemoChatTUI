@@ -90,7 +90,7 @@ Then type a normal message and press Enter.
 
 ## MemoPack Market
 
-MemoPack Market data is stored under the same data directory as chat state. Channels are saved in `channels.json`, local packs are saved as individual JSON files under `packs/`, and tokens are stored in plain JSON. A new data directory starts with `https://n0n4w3.cn:8080` as the selected default channel.
+MemoPack Market data is stored under the same data directory as chat state. Channels are saved in `channels.json`, local packs are saved as individual JSON files under `packs/`, and tokens are stored in plain JSON. A new data directory starts with `https://n0n4w3.cn/memomarket` as the selected default channel.
 
 Open the market or add another remote market channel:
 

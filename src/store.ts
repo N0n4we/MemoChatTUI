@@ -21,10 +21,10 @@ const defaultChannelsFile: MarketChannelsFile = {
   channels: [
     {
       id: "channel_default_n0n4w3",
-      url: "https://n0n4w3.cn:8080",
+      url: "https://n0n4w3.cn/memomarket",
       token: "",
       username: "",
-      name: "https://n0n4w3.cn:8080",
+      name: "https://n0n4w3.cn/memomarket",
       description: "",
     },
   ],
