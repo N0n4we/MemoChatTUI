@@ -1,3 +1,6 @@
+> [!NOTE]
+> Deprecated. Use hermes now.
+
 # MemoChatTUI
 
 A pure TypeScript terminal UI for MemoChat-style AI chat with local memory.
